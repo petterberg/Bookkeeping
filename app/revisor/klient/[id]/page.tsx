@@ -109,7 +109,7 @@ export default function KlientDetailPage() {
               </div>
               <div className="divide-y divide-line">
                 {sortedTx.map((tx) => (
-                  <TxRowDesktop key={tx.id} tx={tx} clientId={client.id} />
+                  <TxRowDesktop key={tx.id} tx={tx} clientId={client.id} learnedRules={client.learnedRules} />
                 ))}
               </div>
             </div>

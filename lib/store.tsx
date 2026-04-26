@@ -10,9 +10,20 @@ import {
   useRef,
   useState,
 } from "react";
-import type { Message, ReceiptType, Revisor, Role, TxStatus } from "./types";
+import type {
+  BookkeepingPosting,
+  LearnedRule,
+  Message,
+  ReceiptType,
+  Revisor,
+  Role,
+  Transaction,
+  TxStatus,
+} from "./types";
 import { REVISOR, CURRENT_CLIENT_ID } from "./mock-data";
 import { uid } from "./utils";
+import { patternFromDescription } from "./bookkeeping-rules";
+import type { Match } from "./csv";
 
 type State = {
   revisor: Revisor;
@@ -27,10 +38,28 @@ type Action =
       type: "update_tx";
       clientId: string;
       txId: string;
-      patch: { status?: TxStatus; receiptType?: ReceiptType; note?: string; receiptUrl?: string };
+      patch: {
+        status?: TxStatus;
+        receiptType?: ReceiptType;
+        note?: string;
+        receiptUrl?: string;
+        posting?: BookkeepingPosting;
+        orphanId?: string;
+      };
+    }
+  | {
+      type: "bokfor";
+      clientId: string;
+      txId: string;
+      posting: BookkeepingPosting;
     }
   | { type: "add_message"; clientId: string; message: Message }
   | { type: "mark_messages_read"; clientId: string; reader: Role }
+  | {
+      type: "import_csv";
+      clientId: string;
+      matches: Match[];
+    }
   | { type: "hydrate"; state: State };
 
 const initialState: State = {
@@ -50,6 +79,33 @@ function recountMissing(state: State): State {
       })),
     },
   };
+}
+
+function upsertLearnedRule(
+  rules: LearnedRule[],
+  description: string,
+  posting: BookkeepingPosting,
+): LearnedRule[] {
+  const pattern = patternFromDescription(description);
+  const existing = rules.find((r) => r.pattern === pattern);
+  const today = new Date().toISOString().slice(0, 10);
+  if (existing) {
+    return rules.map((r) =>
+      r.id !== existing.id
+        ? r
+        : { ...r, posting, count: r.count + 1, lastUsed: today },
+    );
+  }
+  return [
+    ...rules,
+    {
+      id: uid("lr"),
+      pattern,
+      posting,
+      count: 1,
+      lastUsed: today,
+    },
+  ];
 }
 
 function reducer(state: State, action: Action): State {
@@ -79,6 +135,31 @@ function reducer(state: State, action: Action): State {
                   lastActive: new Date().toISOString().slice(0, 10),
                 },
           ),
+        },
+      };
+      return recountMissing(next);
+    }
+
+    case "bokfor": {
+      const next = {
+        ...state,
+        revisor: {
+          ...state.revisor,
+          clients: state.revisor.clients.map((c) => {
+            if (c.id !== action.clientId) return c;
+            const tx = c.transactions.find((t) => t.id === action.txId);
+            if (!tx) return c;
+            return {
+              ...c,
+              transactions: c.transactions.map((t) =>
+                t.id !== action.txId
+                  ? t
+                  : { ...t, status: "bokford" as TxStatus, posting: action.posting },
+              ),
+              learnedRules: upsertLearnedRule(c.learnedRules, tx.description, action.posting),
+              lastActive: new Date().toISOString().slice(0, 10),
+            };
+          }),
         },
       };
       return recountMissing(next);
@@ -119,6 +200,50 @@ function reducer(state: State, action: Action): State {
         },
       };
 
+    case "import_csv": {
+      const next = {
+        ...state,
+        revisor: {
+          ...state.revisor,
+          clients: state.revisor.clients.map((c) => {
+            if (c.id !== action.clientId) return c;
+            const consumedOrphanIds = new Set(
+              action.matches.map((m) => m.orphan?.id).filter((x): x is string => Boolean(x)),
+            );
+            const newTx: Transaction[] = action.matches.map((m) => {
+              const status: TxStatus =
+                m.row.amount > 0
+                  ? "ok"
+                  : m.orphan
+                  ? "inkommen"
+                  : "saknar_underlag";
+              const t: Transaction = {
+                id: uid("ti"),
+                date: m.row.date,
+                description: m.row.description,
+                amount: m.row.amount,
+                status,
+              };
+              if (m.orphan) {
+                t.receiptType = m.orphan.receiptType;
+                t.note = m.orphan.note;
+                t.receiptUrl = m.orphan.filename;
+                t.orphanId = m.orphan.id;
+              }
+              return t;
+            });
+            return {
+              ...c,
+              transactions: [...c.transactions, ...newTx],
+              orphans: c.orphans.filter((o) => !consumedOrphanIds.has(o.id)),
+              lastActive: new Date().toISOString().slice(0, 10),
+            };
+          }),
+        },
+      };
+      return recountMissing(next);
+    }
+
     default:
       return state;
   }
@@ -136,7 +261,7 @@ type Ctx = {
 
 const AppContext = createContext<Ctx | null>(null);
 
-const STORAGE_KEY = "rakna:state:v1";
+const STORAGE_KEY = "rakna:state:v2";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
@@ -146,6 +271,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
+      // Rensa gammal nyckel om den finns – datamodellen ändrades
+      window.localStorage.removeItem("rakna:state:v1");
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as State;

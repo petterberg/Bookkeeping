@@ -9,6 +9,7 @@ import {
   Settings,
   ArrowUpRight,
   Search,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/Logo";
@@ -24,9 +25,20 @@ export function Sidebar() {
   ).length;
   const totalMissing = state.revisor.clients.reduce((acc, c) => acc + c.missingCount, 0);
 
-  const items = [
+  const orphanCount = state.revisor.clients.reduce((acc, c) => acc + c.orphans.length, 0);
+
+  type NavItem = {
+    href: string;
+    label: string;
+    icon: typeof LayoutGrid;
+    badge: number;
+    exact?: boolean;
+  };
+
+  const items: NavItem[] = [
     { href: "/revisor", label: "Översikt", icon: LayoutGrid, badge: totalMissing, exact: true },
     { href: "/revisor/inkorg", label: "Inkorg", icon: Inbox, badge: inkomna },
+    { href: "/revisor/importera", label: "Importera", icon: Upload, badge: orphanCount },
   ];
 
   const initials = REVISOR.name
