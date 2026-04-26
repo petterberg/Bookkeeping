@@ -12,11 +12,14 @@ import {
 } from "react";
 import type {
   BookkeepingPosting,
+  Invoice,
   LearnedRule,
   Message,
   ReceiptType,
   Revisor,
   Role,
+  SalaryRequest,
+  SalaryStatus,
   Transaction,
   TxStatus,
 } from "./types";
@@ -59,6 +62,15 @@ type Action =
       type: "import_csv";
       clientId: string;
       matches: Match[];
+    }
+  | { type: "add_invoice"; clientId: string; invoice: Invoice }
+  | { type: "add_salary_request"; clientId: string; request: SalaryRequest }
+  | {
+      type: "update_salary_status";
+      clientId: string;
+      requestId: string;
+      status: SalaryStatus;
+      decisionNote?: string;
     }
   | { type: "hydrate"; state: State };
 
@@ -200,6 +212,74 @@ function reducer(state: State, action: Action): State {
         },
       };
 
+    case "add_invoice": {
+      return {
+        ...state,
+        revisor: {
+          ...state.revisor,
+          clients: state.revisor.clients.map((c) =>
+            c.id !== action.clientId
+              ? c
+              : {
+                  ...c,
+                  invoices: [...c.invoices, action.invoice],
+                  lastActive: new Date().toISOString().slice(0, 10),
+                },
+          ),
+        },
+      };
+    }
+
+    case "add_salary_request": {
+      return {
+        ...state,
+        revisor: {
+          ...state.revisor,
+          clients: state.revisor.clients.map((c) =>
+            c.id !== action.clientId
+              ? c
+              : {
+                  ...c,
+                  salaryRequests: [...c.salaryRequests, action.request],
+                  lastActive: new Date().toISOString().slice(0, 10),
+                },
+          ),
+        },
+      };
+    }
+
+    case "update_salary_status": {
+      const today = new Date().toISOString().slice(0, 10);
+      return {
+        ...state,
+        revisor: {
+          ...state.revisor,
+          clients: state.revisor.clients.map((c) =>
+            c.id !== action.clientId
+              ? c
+              : {
+                  ...c,
+                  salaryRequests: c.salaryRequests.map((r) =>
+                    r.id !== action.requestId
+                      ? r
+                      : {
+                          ...r,
+                          status: action.status,
+                          decidedAt:
+                            action.status === "godkand" || action.status === "avvisad"
+                              ? new Date().toISOString()
+                              : r.decidedAt,
+                          paidAt:
+                            action.status === "utbetald" ? today : r.paidAt,
+                          decisionNote: action.decisionNote ?? r.decisionNote,
+                        },
+                  ),
+                },
+          ),
+        },
+      };
+    }
+
     case "import_csv": {
       const next = {
         ...state,
@@ -261,7 +341,7 @@ type Ctx = {
 
 const AppContext = createContext<Ctx | null>(null);
 
-const STORAGE_KEY = "rakna:state:v2";
+const STORAGE_KEY = "rakna:state:v3";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
@@ -271,8 +351,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      // Rensa gammal nyckel om den finns – datamodellen ändrades
+      // Rensa gamla nycklar om de finns – datamodellen ändrades
       window.localStorage.removeItem("rakna:state:v1");
+      window.localStorage.removeItem("rakna:state:v2");
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as State;

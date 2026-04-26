@@ -23,6 +23,10 @@ export function Sidebar() {
   const inkomna = state.revisor.clients.flatMap((c) =>
     c.transactions.filter((t) => t.status === "inkommen").map((t) => ({ ...t, clientId: c.id })),
   ).length;
+  const pendingSalary = state.revisor.clients.reduce(
+    (a, c) => a + c.salaryRequests.filter((s) => s.status === "begart").length,
+    0,
+  );
   const totalMissing = state.revisor.clients.reduce((acc, c) => acc + c.missingCount, 0);
 
   const orphanCount = state.revisor.clients.reduce((acc, c) => acc + c.orphans.length, 0);
@@ -37,7 +41,7 @@ export function Sidebar() {
 
   const items: NavItem[] = [
     { href: "/revisor", label: "Översikt", icon: LayoutGrid, badge: totalMissing, exact: true },
-    { href: "/revisor/inkorg", label: "Inkorg", icon: Inbox, badge: inkomna },
+    { href: "/revisor/inkorg", label: "Inkorg", icon: Inbox, badge: inkomna + pendingSalary },
     { href: "/revisor/importera", label: "Importera", icon: Upload, badge: orphanCount },
   ];
 

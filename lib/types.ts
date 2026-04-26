@@ -63,6 +63,60 @@ export interface Message {
   read: boolean;
 }
 
+export type InvoiceStatus = "utkast" | "skickad" | "betald" | "forfallen";
+
+export interface InvoiceLine {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  vatRate: number; // 0, 6, 12, 25
+}
+
+export interface Invoice {
+  id: string;
+  number: string; // 'INV-2026-0042'
+  customerName: string;
+  customerOrgNr?: string;
+  customerEmail?: string;
+  customerAddress?: string;
+  issueDate: string; // 'YYYY-MM-DD'
+  dueDate: string;
+  lines: InvoiceLine[];
+  net: number; // exkl moms
+  vat: number;
+  total: number; // inkl moms
+  status: InvoiceStatus;
+  paidAt?: string;
+  note?: string;
+}
+
+export type SalaryStatus = "begart" | "godkand" | "utbetald" | "avvisad";
+
+export interface SalaryRequest {
+  id: string;
+  month: string; // 'YYYY-MM'
+  grossAmount: number; // bruttolön
+  benefits?: number; // ev förmåner
+  expenseClaims?: number; // utlägg som ska ersättas
+  estimatedNet: number;
+  estimatedTax: number;
+  estimatedEmployerFees: number;
+  status: SalaryStatus;
+  requestedAt: string; // ISO
+  decidedAt?: string;
+  paidAt?: string;
+  note?: string;
+  decisionNote?: string;
+}
+
+export interface MonthlyFlow {
+  month: string; // 'YYYY-MM'
+  income: number;
+  expenses: number;
+  saldo: number; // utgående saldo
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -77,6 +131,10 @@ export interface Client {
   messages: Message[];
   orphans: OrphanReceipt[];
   learnedRules: LearnedRule[];
+  invoices: Invoice[];
+  salaryRequests: SalaryRequest[];
+  cashflow: MonthlyFlow[]; // 6 månader bakåt
+  defaultGrossSalary?: number; // för "Begär lön"-formuläret
   sampleCsv?: string; // demo: kontoutdrag som kan importeras
 }
 

@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Bell } from "lucide-react";
+import { ArrowRight, Bell, LineChart, ReceiptText, Wallet } from "lucide-react";
 import { useApp, useCurrentClient } from "@/lib/store";
 import { Logo } from "@/components/ui/Logo";
 import { StatusCard } from "@/components/klient/StatusCard";
 import { TxRow } from "@/components/klient/TxRow";
+import { MissingAlert } from "@/components/klient/MissingAlert";
 import { Divider } from "@/components/ui/Card";
 import { REVISOR } from "@/lib/mock-data";
+import { formatAmount } from "@/lib/utils";
 
 export default function KlientHemPage() {
   const client = useCurrentClient();
@@ -53,6 +55,57 @@ export default function KlientHemPage() {
       </section>
 
       <StatusCard missing={missing} inkomna={inkomna} bokforda={bokforda} />
+
+      <section className="mt-4">
+        <MissingAlert client={client} />
+      </section>
+
+      <section className="mt-6">
+        <div className="grid grid-cols-3 gap-2.5">
+          <Link
+            href="/klient/ekonomi"
+            className="rounded-xl border hairline bg-paper2 hover:bg-paper3 transition-colors p-3 flex flex-col gap-2 focus-ring"
+          >
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-paper border hairline">
+              <LineChart className="h-[15px] w-[15px]" strokeWidth={1.6} />
+            </span>
+            <span>
+              <span className="block text-[13.5px] text-ink leading-tight">Ekonomi</span>
+              <span className="block text-[11px] text-ink3 mt-0.5 mono">
+                {formatAmount(client.cashflow[client.cashflow.length - 1]?.saldo ?? 0)}
+              </span>
+            </span>
+          </Link>
+          <Link
+            href="/klient/faktura"
+            className="rounded-xl border hairline bg-paper2 hover:bg-paper3 transition-colors p-3 flex flex-col gap-2 focus-ring"
+          >
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-paper border hairline">
+              <ReceiptText className="h-[15px] w-[15px]" strokeWidth={1.6} />
+            </span>
+            <span>
+              <span className="block text-[13.5px] text-ink leading-tight">Fakturor</span>
+              <span className="block text-[11px] text-ink3 mt-0.5">
+                {client.invoices.filter((i) => i.status === "skickad" || i.status === "forfallen").length} utestående
+              </span>
+            </span>
+          </Link>
+          <Link
+            href="/klient/lon"
+            className="rounded-xl border hairline bg-paper2 hover:bg-paper3 transition-colors p-3 flex flex-col gap-2 focus-ring"
+          >
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-paper border hairline">
+              <Wallet className="h-[15px] w-[15px]" strokeWidth={1.6} />
+            </span>
+            <span>
+              <span className="block text-[13.5px] text-ink leading-tight">Löneuttag</span>
+              <span className="block text-[11px] text-ink3 mt-0.5">
+                {client.salaryRequests.find((s) => s.status === "begart") ? "Väntar svar" : "Begär lön"}
+              </span>
+            </span>
+          </Link>
+        </div>
+      </section>
 
       <section className="mt-7">
         <div className="flex items-end justify-between mb-2">
