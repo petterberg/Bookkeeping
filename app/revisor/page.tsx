@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Inbox, Send, Users } from "lucide-react";
+import { ArrowRight, ChevronRight, Check, Inbox, Send, Users, X } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { Topbar } from "@/components/revisor/Sidebar";
 import { KlientRow } from "@/components/revisor/KlientRow";
-import { formatRelative } from "@/lib/utils";
+import { formatDate, formatRelative } from "@/lib/utils";
+import type { Client } from "@/lib/types";
 
 export default function RevisorDashboard() {
   const { state } = useApp();
@@ -46,8 +47,8 @@ export default function RevisorDashboard() {
         }
       />
 
-      <div className="px-8 lg:px-10 py-6 space-y-8">
-        <section className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="px-4 lg:px-8 xl:px-10 py-6 space-y-8">
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Stat label="Klienter" value={clients.length} icon={<Users className="h-4 w-4" strokeWidth={1.6} />} />
           <Stat label="Saknar underlag" value={totalMissing} tone={totalMissing > 0 ? "red" : "neutral"} />
           <Stat
@@ -60,19 +61,20 @@ export default function RevisorDashboard() {
         </section>
 
         <section>
-          <div className="flex items-end justify-between mb-3">
-            <div>
-              <h2 className="display text-[24px] leading-tight">Klienter</h2>
+          <div className="flex items-end justify-between mb-3 gap-3">
+            <div className="min-w-0">
+              <h2 className="display text-[22px] lg:text-[24px] leading-tight">Klienter</h2>
               <p className="text-[12.5px] text-ink3 mt-0.5">
                 Sorterade efter behov av åtgärd
               </p>
             </div>
-            <div className="text-[12px] text-ink3">
-              {oppna > 0 ? `${oppna} olästa meddelanden` : "Inga olästa meddelanden"}
+            <div className="text-[12px] text-ink3 text-right shrink-0">
+              {oppna > 0 ? `${oppna} olästa` : "Inga olästa"}
             </div>
           </div>
 
-          <div className="rounded-xl border hairline bg-paper overflow-hidden">
+          {/* Desktop-tabell */}
+          <div className="hidden lg:block rounded-xl border hairline bg-paper overflow-hidden">
             <div className="grid grid-cols-[minmax(0,2.4fr)_repeat(4,minmax(0,1fr))_auto] gap-4 px-5 py-3 text-[11px] uppercase tracking-[0.14em] text-ink3 border-b hairline bg-paper2/40">
               <div>Klient</div>
               <div>Underlag</div>
@@ -87,10 +89,17 @@ export default function RevisorDashboard() {
               ))}
             </div>
           </div>
+
+          {/* Mobil-kort */}
+          <div className="lg:hidden rounded-xl border hairline bg-paper overflow-hidden divide-y divide-line">
+            {sortedClients.map((c) => (
+              <KlientCardMobile key={c.id} client={c} />
+            ))}
+          </div>
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 rounded-xl border hairline bg-paper p-6">
+          <div className="lg:col-span-2 rounded-xl border hairline bg-paper p-4 lg:p-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="display text-[20px]">Senaste i tråden</h3>
               <Link
@@ -131,7 +140,7 @@ export default function RevisorDashboard() {
             </ul>
           </div>
 
-          <div className="rounded-xl border hairline bg-ink text-paper p-6 flex flex-col gap-4">
+          <div className="rounded-xl border hairline bg-ink text-paper p-4 lg:p-6 flex flex-col gap-4">
             <div className="flex items-center justify-between text-paper/70 text-[11px] uppercase tracking-[0.14em]">
               <span>Påminnelse</span>
               <Send className="h-3.5 w-3.5" strokeWidth={1.6} />
@@ -155,6 +164,61 @@ export default function RevisorDashboard() {
         </section>
       </div>
     </>
+  );
+}
+
+function KlientCardMobile({ client }: { client: Client }) {
+  const initials = client.name
+    .split(" ")
+    .filter((w) => /[A-Za-zÅÄÖåäö]/.test(w[0] ?? ""))
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+  const inkomna = client.transactions.filter((t) => t.status === "inkommen").length;
+  return (
+    <Link
+      href={`/revisor/klient/${client.id}`}
+      className="flex items-center gap-3 px-4 py-3.5 hover:bg-paper2 active:bg-paper2 transition-colors"
+    >
+      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-paper2 border hairline text-[12px] font-medium shrink-0">
+        {initials}
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[14.5px] truncate">{client.name}</p>
+          <span className="mono text-[11px] text-ink3 shrink-0">{formatDate(client.lastActive)}</span>
+        </div>
+        <div className="flex items-center gap-2 mt-1 text-[11.5px] flex-wrap">
+          {client.missingCount > 0 ? (
+            <span className="inline-flex items-center gap-1 mono text-red">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-red" />
+              {client.missingCount} saknar
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-green">
+              <Check className="h-3 w-3" strokeWidth={2.4} /> Allt på plats
+            </span>
+          )}
+          {inkomna > 0 ? (
+            <span className="inline-flex items-center gap-1 mono text-amber">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber" />
+              {inkomna} att bokföra
+            </span>
+          ) : null}
+          {client.fortnoxSynced ? (
+            <span className="inline-flex items-center gap-1 text-ink3">
+              <Check className="h-3 w-3" strokeWidth={2.2} /> Fortnox
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-red">
+              <X className="h-3 w-3" strokeWidth={2.2} /> ej synkad
+            </span>
+          )}
+        </div>
+      </div>
+      <ChevronRight className="h-4 w-4 text-ink4 shrink-0" strokeWidth={1.6} />
+    </Link>
   );
 }
 

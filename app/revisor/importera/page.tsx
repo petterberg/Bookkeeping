@@ -69,7 +69,7 @@ export default function ImporteraPage() {
         }
       />
 
-      <div className="px-8 lg:px-10 py-6 space-y-6">
+      <div className="px-4 lg:px-8 xl:px-10 py-6 space-y-6">
         <section className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-6">
           <aside className="space-y-4">
             <div className="rounded-xl border hairline bg-paper p-5">

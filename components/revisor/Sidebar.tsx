@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Search,
   Upload,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/Logo";
@@ -17,7 +18,7 @@ import { useApp } from "@/lib/store";
 import { REVISOR } from "@/lib/mock-data";
 import { FortnoxStatus } from "@/components/revisor/FortnoxStatus";
 
-export function Sidebar() {
+export function Sidebar({ onNavigate = () => {} }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { state } = useApp();
 
@@ -52,16 +53,27 @@ export function Sidebar() {
     .join("");
 
   return (
-    <aside className="w-[260px] shrink-0 border-r hairline bg-paper flex flex-col h-screen sticky top-0">
+    <aside className="w-[260px] shrink-0 border-r hairline bg-paper flex flex-col h-screen lg:sticky lg:top-0">
       <div className="px-5 pt-6 pb-4 flex items-center justify-between">
         <Logo size="sm" href="/" />
-        <Link
-          href="/"
-          className="text-[11px] uppercase tracking-[0.14em] text-ink3 hover:text-ink"
-          title="Byt roll"
-        >
-          Byt
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            onClick={onNavigate}
+            className="text-[11px] uppercase tracking-[0.14em] text-ink3 hover:text-ink"
+            title="Byt roll"
+          >
+            Byt
+          </Link>
+          <button
+            type="button"
+            onClick={onNavigate}
+            className="lg:hidden inline-flex h-8 w-8 items-center justify-center rounded-lg bg-paper2 hover:bg-paper3 text-ink3 hover:text-ink focus-ring"
+            aria-label="Stäng meny"
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={1.8} />
+          </button>
+        </div>
       </div>
 
       <div className="px-3">
@@ -80,6 +92,7 @@ export function Sidebar() {
             <Link
               key={it.href}
               href={it.href}
+              onClick={onNavigate}
               className={cn(
                 "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[14px] transition-colors",
                 active ? "bg-ink text-paper" : "text-ink2 hover:bg-paper2",
@@ -125,6 +138,7 @@ export function Sidebar() {
               <li key={c.id}>
                 <Link
                   href={href}
+                  onClick={onNavigate}
                   className={cn(
                     "flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13.5px] transition-colors",
                     active ? "bg-paper2 text-ink" : "text-ink2 hover:bg-paper2",
@@ -180,22 +194,24 @@ export function Topbar({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-20 bg-paper/85 backdrop-blur border-b hairline">
-      <div className="px-8 lg:px-10 py-4 flex items-end justify-between gap-6">
+    <header className="sticky top-14 lg:top-0 z-20 bg-paper/85 backdrop-blur border-b hairline">
+      <div className="px-4 lg:px-8 xl:px-10 py-4 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 lg:gap-6">
         <div className="min-w-0">
           {subtitle ? (
-            <p className="text-[12px] uppercase tracking-[0.14em] text-ink3 mb-1">
+            <p className="text-[11.5px] lg:text-[12px] uppercase tracking-[0.14em] text-ink3 mb-1">
               {subtitle}
             </p>
           ) : null}
-          <h1 className="display text-[34px] leading-tight tracking-tightish truncate">{title}</h1>
-          {meta ? <div className="mt-1 text-[13px] text-ink3">{meta}</div> : null}
+          <h1 className="display text-[26px] lg:text-[34px] leading-tight tracking-tightish truncate">
+            {title}
+          </h1>
+          {meta ? <div className="mt-1 text-[12.5px] lg:text-[13px] text-ink3">{meta}</div> : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {actions}
           <Link
             href="/klient"
-            className="inline-flex items-center gap-1.5 text-[12px] text-ink3 hover:text-ink"
+            className="hidden lg:inline-flex items-center gap-1.5 text-[12px] text-ink3 hover:text-ink"
           >
             Förhandsgranska klient-vy
             <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={1.7} />

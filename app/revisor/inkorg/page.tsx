@@ -49,7 +49,7 @@ export default function InkorgPage() {
         }
       />
 
-      <div className="px-8 lg:px-10 py-6">
+      <div className="px-4 lg:px-8 xl:px-10 py-6">
         {empty ? (
           <div className="rounded-xl border hairline bg-paper2 p-10 text-center">
             <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-paper border hairline mb-3">

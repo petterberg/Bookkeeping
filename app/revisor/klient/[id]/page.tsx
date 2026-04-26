@@ -120,7 +120,7 @@ export default function KlientDetailPage() {
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-0 flex-1 min-h-0">
-        <div className="px-8 lg:px-10 py-6 space-y-6 overflow-y-auto">
+        <div className="px-4 lg:px-8 xl:px-10 py-6 space-y-6 overflow-y-auto">
           <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Stat
               label="Saknar underlag"
