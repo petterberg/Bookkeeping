@@ -22,6 +22,7 @@ export interface Transaction {
   note?: string;
   posting?: BookkeepingPosting; // satt vid bokföring
   orphanId?: string; // länk till matchat underlag som följde med från importen
+  fortnoxFileId?: string; // arkiv-id i Fortnox när underlaget laddades upp
 }
 
 export interface OrphanReceipt {
@@ -89,6 +90,7 @@ export interface Invoice {
   status: InvoiceStatus;
   paidAt?: string;
   note?: string;
+  fortnoxSynced?: boolean; // true om fakturan skapades direkt i Fortnox
 }
 
 export type SalaryStatus = "begart" | "godkand" | "utbetald" | "avvisad";

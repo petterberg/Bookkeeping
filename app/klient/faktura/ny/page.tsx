@@ -74,12 +74,40 @@ export default function NyFakturaPage() {
     return `${year}-${String(max + 1).padStart(4, "0")}`;
   }
 
-  function submit(asStatus: InvoiceStatus) {
+  async function submit(asStatus: InvoiceStatus) {
     if (!valid && asStatus !== "utkast") return;
     setSubmitting(true);
+
+    type Source = "fortnox" | "mock" | "error";
+    let documentNumber: string | undefined;
+    let source: Source = "mock";
+
+    if (asStatus === "skickad") {
+      try {
+        const res = await fetch("/api/fortnox/invoices", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customerName: customerName.trim(),
+            customerEmail: customerEmail.trim() || undefined,
+            customerOrgNr: customerOrgNr.trim() || undefined,
+            lines,
+            issueDate,
+            dueDate,
+            note: note.trim() || undefined,
+          }),
+        });
+        const data = (await res.json()) as { documentNumber?: string; source?: Source };
+        documentNumber = data.documentNumber;
+        source = data.source ?? "mock";
+      } catch {
+        source = "error";
+      }
+    }
+
     const inv: Invoice = {
       id: uid("inv"),
-      number: nextInvoiceNumber(),
+      number: documentNumber ?? nextInvoiceNumber(),
       customerName: customerName.trim() || "Ej namngiven kund",
       customerOrgNr: customerOrgNr.trim() || undefined,
       customerEmail: customerEmail.trim() || undefined,
@@ -91,14 +119,20 @@ export default function NyFakturaPage() {
       total: totals.total,
       status: asStatus,
       note: note.trim() || undefined,
+      fortnoxSynced: source === "fortnox",
     };
     dispatch({ type: "add_invoice", clientId: client.id, invoice: inv });
-    toast(
-      asStatus === "skickad"
-        ? `Faktura ${inv.number} skickad`
-        : `Faktura ${inv.number} sparad som utkast`,
-      "success",
-    );
+
+    if (asStatus === "skickad") {
+      toast(
+        source === "fortnox"
+          ? `Faktura ${inv.number} skapad och synkad med Fortnox`
+          : `Faktura ${inv.number} skickad (demo-läge)`,
+        "success",
+      );
+    } else {
+      toast(`Faktura ${inv.number} sparad som utkast`, "success");
+    }
     setTimeout(() => router.push("/klient/faktura"), 250);
   }
 

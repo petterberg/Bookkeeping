@@ -48,6 +48,7 @@ type Action =
         receiptUrl?: string;
         posting?: BookkeepingPosting;
         orphanId?: string;
+        fortnoxFileId?: string;
       };
     }
   | {

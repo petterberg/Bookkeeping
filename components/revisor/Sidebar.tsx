@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/Logo";
 import { useApp } from "@/lib/store";
 import { REVISOR } from "@/lib/mock-data";
+import { FortnoxStatus } from "@/components/revisor/FortnoxStatus";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -141,6 +142,10 @@ export function Sidebar() {
             );
           })}
         </ul>
+      </div>
+
+      <div className="px-3 pb-3 pt-2 border-t hairline">
+        <FortnoxStatus />
       </div>
 
       <div className="border-t hairline p-3 flex items-center gap-3">

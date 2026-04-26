@@ -19,26 +19,53 @@ export function UploadDrawer({ tx, clientId }: { tx?: Transaction; clientId: str
   const { dispatch, toast } = useApp();
   const [type, setType] = useState<ReceiptType | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [note, setNote] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
-  function pickFile(name: string) {
-    setFilename(name);
+  function pickFile(file: File) {
+    setSelectedFile(file);
+    setFilename(file.name);
   }
 
   function onDrop(e: DragEvent<HTMLLabelElement>) {
     e.preventDefault();
     setDragOver(false);
     const f = e.dataTransfer.files?.[0];
-    if (f) pickFile(f.name);
+    if (f) pickFile(f);
   }
 
-  function submit() {
+  async function submit() {
     if (!filename || !type || !tx) return;
     setSubmitting(true);
+
+    type Source = "fortnox" | "mock" | "error";
+    let fortnoxFileId: string | undefined;
+    let source: Source = "mock";
+
+    try {
+      const formData = new FormData();
+      if (selectedFile) {
+        formData.append("file", selectedFile, filename);
+      } else {
+        // Drag-drop kan ha tappat File-objektet om användaren ändrade input —
+        // skicka bara metadata så routen returnerar mock-id.
+        formData.append("filename", filename);
+      }
+      const res = await fetch("/api/fortnox/archive", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await res.json()) as { fileId?: string; source?: Source };
+      fortnoxFileId = data.fileId;
+      source = data.source ?? "mock";
+    } catch {
+      source = "error";
+    }
+
     dispatch({
       type: "update_tx",
       clientId,
@@ -48,12 +75,17 @@ export function UploadDrawer({ tx, clientId }: { tx?: Transaction; clientId: str
         receiptType: type,
         note: note || undefined,
         receiptUrl: filename,
+        fortnoxFileId,
       },
     });
-    setTimeout(() => {
-      toast("Skickat till revisorn", "success");
-      router.push("/klient");
-    }, 350);
+
+    toast(
+      source === "fortnox"
+        ? "Skickat till revisorn · uppladdat i Fortnox Arkiv"
+        : "Skickat till revisorn",
+      "success",
+    );
+    setTimeout(() => router.push("/klient"), 250);
   }
 
   return (
@@ -96,6 +128,7 @@ export function UploadDrawer({ tx, clientId }: { tx?: Transaction; clientId: str
               onClick={(e) => {
                 e.preventDefault();
                 setFilename(null);
+                setSelectedFile(null);
               }}
               className="inline-flex items-center gap-1 text-[12px] text-ink3 hover:text-ink"
             >
@@ -121,7 +154,7 @@ export function UploadDrawer({ tx, clientId }: { tx?: Transaction; clientId: str
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) pickFile(f.name);
+            if (f) pickFile(f);
           }}
         />
       </label>
@@ -155,7 +188,7 @@ export function UploadDrawer({ tx, clientId }: { tx?: Transaction; clientId: str
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) pickFile(f.name);
+            if (f) pickFile(f);
           }}
         />
       </div>
