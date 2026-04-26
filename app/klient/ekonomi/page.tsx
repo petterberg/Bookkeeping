@@ -16,6 +16,21 @@ export default function EkonomiPage() {
   const resultPrev = prev ? prev.income - prev.expenses : 0;
   const resultDelta = resultPrev !== 0 ? Math.round(((result - resultPrev) / Math.abs(resultPrev)) * 100) : 0;
 
+  // "Ej bokförd ännu" = transaktioner som inte har status "bokford" eller "ok".
+  // Räknas från klientens transaktioner för innevarande period (mars).
+  const pendingExpenses = client.transactions
+    .filter((t) => t.amount < 0 && t.status !== "bokford" && t.status !== "ok")
+    .reduce((a, t) => a + Math.abs(t.amount), 0);
+  const pendingIncome = client.transactions
+    .filter((t) => t.amount > 0 && t.status !== "bokford" && t.status !== "ok")
+    .reduce((a, t) => a + t.amount, 0);
+  const pendingExpenseCount = client.transactions.filter(
+    (t) => t.amount < 0 && t.status !== "bokford" && t.status !== "ok",
+  ).length;
+  const pendingIncomeCount = client.transactions.filter(
+    (t) => t.amount > 0 && t.status !== "bokford" && t.status !== "ok",
+  ).length;
+
   const utestaende = client.invoices
     .filter((i) => i.status === "skickad" || i.status === "forfallen")
     .reduce((a, i) => a + i.total, 0);
@@ -69,6 +84,7 @@ export default function EkonomiPage() {
           value={formatAmount(last?.income ?? 0)}
           delta={prev ? Math.round(((last!.income - prev.income) / prev.income) * 100) : 0}
           tone="green"
+          pending={pendingIncome > 0 ? { amount: pendingIncome, count: pendingIncomeCount } : undefined}
         />
         <Stat
           label="Utgifter mars"
@@ -76,6 +92,7 @@ export default function EkonomiPage() {
           delta={prev ? Math.round(((last!.expenses - prev.expenses) / prev.expenses) * 100) : 0}
           tone="red"
           invert
+          pending={pendingExpenses > 0 ? { amount: pendingExpenses, count: pendingExpenseCount } : undefined}
         />
         <Stat
           label="Resultat mars"
@@ -104,6 +121,23 @@ export default function EkonomiPage() {
           </div>
         </div>
         <InOutBarChart data={flows} />
+        {pendingExpenses > 0 || pendingIncome > 0 ? (
+          <p className="text-[11.5px] text-ink3 mt-2 leading-snug">
+            <span className="text-amber">*</span> Mars-summorna inkluderar{" "}
+            {pendingExpenses > 0 ? (
+              <>
+                <span className="text-ink mono">{formatAmount(pendingExpenses)}</span> i utgifter
+              </>
+            ) : null}
+            {pendingExpenses > 0 && pendingIncome > 0 ? " och " : ""}
+            {pendingIncome > 0 ? (
+              <>
+                <span className="text-ink mono">{formatAmount(pendingIncome)}</span> i intäkter
+              </>
+            ) : null}{" "}
+            som ännu inte är bokförda.
+          </p>
+        ) : null}
       </section>
 
       <section className="mt-4 rounded-xl border hairline bg-paper2 p-4">
@@ -170,6 +204,7 @@ function Stat({
   tone = "neutral",
   invert = false,
   extra,
+  pending,
 }: {
   label: string;
   value: string;
@@ -177,6 +212,7 @@ function Stat({
   tone?: "neutral" | "green" | "red" | "amber";
   invert?: boolean;
   extra?: string;
+  pending?: { amount: number; count: number };
 }) {
   const tones = {
     neutral: "bg-paper2 text-ink",
@@ -189,9 +225,16 @@ function Stat({
     <div className={cn("rounded-xl border hairline p-3.5", tones[tone])}>
       <p className="text-[11.5px] uppercase tracking-[0.14em] opacity-80">{label}</p>
       <p className="display text-[22px] mono leading-none mt-1.5">{value}</p>
-      {extra ? (
+      {pending ? (
+        <p className="text-[11.5px] mt-1.5 leading-tight opacity-90">
+          varav <span className="mono">{formatAmount(pending.amount)}</span>
+          <br />
+          ej bokförd ännu · {pending.count} st
+        </p>
+      ) : null}
+      {!pending && extra ? (
         <p className="text-[11.5px] opacity-80 mt-1.5">{extra}</p>
-      ) : delta !== undefined ? (
+      ) : !pending && delta !== undefined ? (
         <p className="text-[11.5px] mt-1.5 inline-flex items-center gap-1 opacity-80">
           {positive ? (
             <ArrowUpRight className="h-3 w-3" strokeWidth={2} />
