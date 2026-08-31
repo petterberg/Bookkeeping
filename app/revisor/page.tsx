@@ -5,6 +5,7 @@ import { ArrowRight, ChevronRight, Check, Inbox, Send, Users, X } from "lucide-r
 import { useApp } from "@/lib/store";
 import { Topbar } from "@/components/revisor/Sidebar";
 import { KlientRow } from "@/components/revisor/KlientRow";
+import { RoiPanel } from "@/components/revisor/RoiPanel";
 import { formatDate, formatRelative } from "@/lib/utils";
 import type { Client } from "@/lib/types";
 
@@ -59,6 +60,8 @@ export default function RevisorDashboard() {
           />
           <Stat label="Bokförda i mars" value={totalBokforda} tone="green" />
         </section>
+
+        <RoiPanel />
 
         <section>
           <div className="flex items-end justify-between mb-3 gap-3">
