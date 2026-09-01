@@ -73,13 +73,26 @@ type Action =
       status: SalaryStatus;
       decisionNote?: string;
     }
-  | { type: "hydrate"; state: State };
+  | { type: "hydrate"; state: State }
+  | { type: "hydrate_revisor"; revisor: Revisor };
 
 const initialState: State = {
   revisor: REVISOR,
   currentRole: "klient",
   currentClientId: CURRENT_CLIENT_ID,
 };
+
+// Actions som ska persistas till servern (bakåt-synk till Supabase).
+const PERSISTED: Action["type"][] = [
+  "update_tx",
+  "bokfor",
+  "add_message",
+  "mark_messages_read",
+  "add_invoice",
+  "add_salary_request",
+  "update_salary_status",
+  "import_csv",
+];
 
 function recountMissing(state: State): State {
   return {
@@ -104,20 +117,12 @@ function upsertLearnedRule(
   const today = new Date().toISOString().slice(0, 10);
   if (existing) {
     return rules.map((r) =>
-      r.id !== existing.id
-        ? r
-        : { ...r, posting, count: r.count + 1, lastUsed: today },
+      r.id !== existing.id ? r : { ...r, posting, count: r.count + 1, lastUsed: today },
     );
   }
   return [
     ...rules,
-    {
-      id: uid("lr"),
-      pattern,
-      posting,
-      count: 1,
-      lastUsed: today,
-    },
+    { id: uid("lr"), pattern, posting, count: 1, lastUsed: today },
   ];
 }
 
@@ -125,6 +130,9 @@ function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "hydrate":
       return action.state;
+
+    case "hydrate_revisor":
+      return { ...state, revisor: action.revisor };
 
     case "set_role":
       return { ...state, currentRole: action.role };
@@ -186,11 +194,7 @@ function reducer(state: State, action: Action): State {
           clients: state.revisor.clients.map((c) =>
             c.id !== action.clientId
               ? c
-              : {
-                  ...c,
-                  messages: [...c.messages, action.message],
-                  lastActive: new Date().toISOString().slice(0, 10),
-                },
+              : { ...c, messages: [...c.messages, action.message], lastActive: new Date().toISOString().slice(0, 10) },
           ),
         },
       };
@@ -213,7 +217,7 @@ function reducer(state: State, action: Action): State {
         },
       };
 
-    case "add_invoice": {
+    case "add_invoice":
       return {
         ...state,
         revisor: {
@@ -221,17 +225,12 @@ function reducer(state: State, action: Action): State {
           clients: state.revisor.clients.map((c) =>
             c.id !== action.clientId
               ? c
-              : {
-                  ...c,
-                  invoices: [...c.invoices, action.invoice],
-                  lastActive: new Date().toISOString().slice(0, 10),
-                },
+              : { ...c, invoices: [...c.invoices, action.invoice], lastActive: new Date().toISOString().slice(0, 10) },
           ),
         },
       };
-    }
 
-    case "add_salary_request": {
+    case "add_salary_request":
       return {
         ...state,
         revisor: {
@@ -247,7 +246,6 @@ function reducer(state: State, action: Action): State {
           ),
         },
       };
-    }
 
     case "update_salary_status": {
       const today = new Date().toISOString().slice(0, 10);
@@ -270,8 +268,7 @@ function reducer(state: State, action: Action): State {
                             action.status === "godkand" || action.status === "avvisad"
                               ? new Date().toISOString()
                               : r.decidedAt,
-                          paidAt:
-                            action.status === "utbetald" ? today : r.paidAt,
+                          paidAt: action.status === "utbetald" ? today : r.paidAt,
                           decisionNote: action.decisionNote ?? r.decisionNote,
                         },
                   ),
@@ -293,11 +290,7 @@ function reducer(state: State, action: Action): State {
             );
             const newTx: Transaction[] = action.matches.map((m) => {
               const status: TxStatus =
-                m.row.amount > 0
-                  ? "ok"
-                  : m.orphan
-                  ? "inkommen"
-                  : "saknar_underlag";
+                m.row.amount > 0 ? "ok" : m.orphan ? "inkommen" : "saknar_underlag";
               const t: Transaction = {
                 id: uid("ti"),
                 date: m.row.date,
@@ -331,41 +324,96 @@ function reducer(state: State, action: Action): State {
 }
 
 type Toast = { id: string; text: string; tone?: "default" | "success" };
+type Source = "supabase" | "mock" | "unknown";
 
 type Ctx = {
   state: State;
-  dispatch: React.Dispatch<Action>;
+  dispatch: (action: Action) => void;
   toasts: Toast[];
   toast: (text: string, tone?: Toast["tone"]) => void;
   dismissToast: (id: string) => void;
+  refresh: () => Promise<void>;
+  resetDemo: () => Promise<void>;
+  source: Source;
 };
 
 const AppContext = createContext<Ctx | null>(null);
 
-const STORAGE_KEY = "rakna:state:v3";
+const STORAGE_KEY = "rakna:state:v4";
+const POLL_INTERVAL_MS = 15000;
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, rawDispatch] = useReducer(reducer, initialState);
   const [hydrated, setHydrated] = useState(false);
+  const [source, setSource] = useState<Source>("unknown");
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const inFlightSync = useRef(false);
 
+  const applyServerRevisor = useCallback((rev: Revisor) => {
+    rawDispatch({ type: "hydrate_revisor", revisor: rev });
+  }, []);
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/data/state", { cache: "no-store" });
+      const data = (await res.json()) as { revisor?: Revisor; source?: Source };
+      if (data.revisor) applyServerRevisor(data.revisor);
+      if (data.source) setSource(data.source);
+    } catch {
+      // Network-off? Fortsätt med lokal state.
+    }
+  }, [applyServerRevisor]);
+
+  const resetDemo = useCallback(async () => {
+    try {
+      const res = await fetch("/api/data/reset", { method: "POST" });
+      const data = (await res.json()) as { revisor?: Revisor; source?: Source; error?: string };
+      if (data.error) throw new Error(data.error);
+      if (data.revisor) applyServerRevisor(data.revisor);
+      if (data.source) setSource(data.source);
+    } catch (err) {
+      console.error("resetDemo failed", err);
+    }
+  }, [applyServerRevisor]);
+
+  // Snabb hydration från localStorage för första paint, sen server-truth.
   useEffect(() => {
     try {
-      // Rensa gamla nycklar om de finns – datamodellen ändrades
-      window.localStorage.removeItem("rakna:state:v1");
-      window.localStorage.removeItem("rakna:state:v2");
+      ["rakna:state:v1", "rakna:state:v2", "rakna:state:v3"].forEach((k) =>
+        window.localStorage.removeItem(k),
+      );
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as State;
-        dispatch({ type: "hydrate", state: parsed });
+        rawDispatch({ type: "hydrate", state: parsed });
       }
     } catch {
       // ignore
     }
     setHydrated(true);
-  }, []);
+    void refresh();
+  }, [refresh]);
 
+  // Polla för att fånga uppdateringar från andra enheter/browsers.
+  useEffect(() => {
+    if (!hydrated) return;
+    const interval = setInterval(() => {
+      if (!inFlightSync.current && !document.hidden) void refresh();
+    }, POLL_INTERVAL_MS);
+    const onFocus = () => {
+      if (!document.hidden) void refresh();
+    };
+    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [hydrated, refresh]);
+
+  // Persistera lokal state till localStorage för nästa mount.
   useEffect(() => {
     if (!hydrated) return;
     try {
@@ -374,6 +422,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // ignore
     }
   }, [state, hydrated]);
+
+  // Dispatcher: applicerar lokalt (optimistisk UI) och synkar med servern.
+  const dispatch = useCallback(
+    (action: Action) => {
+      rawDispatch(action);
+      if (!PERSISTED.includes(action.type)) return;
+      inFlightSync.current = true;
+      void (async () => {
+        try {
+          const res = await fetch("/api/data/action", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(action),
+          });
+          const data = (await res.json()) as {
+            revisor?: Revisor;
+            source?: Source;
+            error?: string;
+          };
+          if (res.ok && data.revisor) {
+            applyServerRevisor(data.revisor);
+            if (data.source) setSource(data.source);
+          } else if (data.error && data.source !== "mock") {
+            console.warn("Sync fail:", data.error);
+          }
+        } catch (err) {
+          console.warn("Network dispatch failed — keeping local state", err);
+        } finally {
+          inFlightSync.current = false;
+        }
+      })();
+    },
+    [applyServerRevisor],
+  );
 
   const dismissToast = useCallback((id: string) => {
     setToasts((cur) => cur.filter((t) => t.id !== id));
@@ -395,8 +477,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ state, dispatch, toasts, toast, dismissToast }),
-    [state, toasts, toast, dismissToast],
+    () => ({ state, dispatch, toasts, toast, dismissToast, refresh, resetDemo, source }),
+    [state, dispatch, toasts, toast, dismissToast, refresh, resetDemo, source],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

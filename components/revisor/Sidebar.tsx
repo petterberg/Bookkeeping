@@ -17,6 +17,7 @@ import { Logo } from "@/components/ui/Logo";
 import { useApp } from "@/lib/store";
 import { REVISOR } from "@/lib/mock-data";
 import { FortnoxStatus } from "@/components/revisor/FortnoxStatus";
+import { ResetDemoButton } from "@/components/revisor/ResetDemoButton";
 
 export function Sidebar({ onNavigate = () => {} }: { onNavigate?: () => void }) {
   const pathname = usePathname();
@@ -158,8 +159,9 @@ export function Sidebar({ onNavigate = () => {} }: { onNavigate?: () => void }) 
         </ul>
       </div>
 
-      <div className="px-3 pb-3 pt-2 border-t hairline">
+      <div className="px-3 pb-3 pt-2 border-t hairline space-y-2">
         <FortnoxStatus />
+        <ResetDemoButton />
       </div>
 
       <div className="border-t hairline p-3 flex items-center gap-3">
